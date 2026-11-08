@@ -67,15 +67,15 @@ const main = async () => {
   let total = 0;
   for (const board of boards) {
     const at = syncedAt(db, board.name);
-    if (!at || values.sync) {
+    if ((!at && !countJobs(db, board.name)) || values.sync) {
       try {
         await sync(board);
       } catch (e) {
         console.error(`--- ${board.name} FAILED ${e instanceof Error ? e.message : e}`);
         continue;
       }
-    } else if (Date.now() - at > STALE_WARN_MS) {
-      console.error(`--- ${board.name} index is ${age(at)} old, add --sync to refresh`);
+    } else if (!at || Date.now() - at > STALE_WARN_MS) {
+      console.error(`--- ${board.name} index is ${at ? `${age(at)} old` : 'incomplete'}, add --sync to refresh`);
     }
     const started = Date.now();
     const { rows, total: n } = searchJobs(db, board.name, terms, states, limit);

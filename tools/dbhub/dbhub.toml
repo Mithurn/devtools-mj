@@ -1,0 +1,87 @@
+[[sources]]
+id = "clavis-prod"
+type = "postgres"
+host = "zapmail-bizmail-db.netbird.cloud"
+port = 5432
+database = "clavis"
+user = "mithurn"
+password = "${DBHUB_CLAVIS_PROD_PASSWORD}"
+sslmode = "disable"
+connection_timeout = 15
+query_timeout = 30
+
+[[sources]]
+id = "zapmail-prod"
+type = "postgres"
+host = "zapmail-bizmail-db.netbird.cloud"
+port = 5432
+database = "zapmail"
+user = "mithurn"
+password = "${DBHUB_ZAPMAIL_PROD_PASSWORD}"
+sslmode = "disable"
+connection_timeout = 15
+query_timeout = 30
+
+[[sources]]
+id = "zapmail-staging"
+type = "postgres"
+host = "devops.netbird.cloud"
+port = 5432
+database = "zapmail"
+user = "storezappgdb"
+password = "${DBHUB_ZAPMAIL_STAGING_PASSWORD}"
+sslmode = "disable"
+connection_timeout = 15
+query_timeout = 30
+
+[[sources]]
+id = "clavis-local"
+type = "postgres"
+host = "localhost"
+port = 5432
+database = "clavis_db"
+user = "postgres"
+password = "${DBHUB_CLAVIS_LOCAL_PASSWORD}"
+sslmode = "require"
+connection_timeout = 15
+query_timeout = 30
+
+[[tools]]
+name = "execute_sql"
+source = "clavis-prod"
+readonly = true
+max_rows = 1000
+
+[[tools]]
+name = "search_objects"
+source = "clavis-prod"
+
+[[tools]]
+name = "execute_sql"
+source = "zapmail-prod"
+readonly = true
+max_rows = 1000
+
+[[tools]]
+name = "search_objects"
+source = "zapmail-prod"
+
+[[tools]]
+name = "execute_sql"
+source = "zapmail-staging"
+readonly = true
+max_rows = 1000
+
+[[tools]]
+name = "search_objects"
+source = "zapmail-staging"
+
+[[tools]]
+name = "execute_sql"
+source = "clavis-local"
+readonly = true
+max_rows = 1000
+
+[[tools]]
+name = "search_objects"
+source = "clavis-local"

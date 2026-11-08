@@ -20,6 +20,7 @@ export const openStore = (file: string): DatabaseSync => {
     mkdirSync(dirname(file), { recursive: true });
   }
   const db = new DatabaseSync(file);
+  db.exec('PRAGMA busy_timeout = 10000; PRAGMA journal_mode = WAL;');
   db.exec(`
     CREATE TABLE IF NOT EXISTS jobs (
       board TEXT NOT NULL, queue TEXT NOT NULL, id TEXT NOT NULL, state TEXT NOT NULL,
@@ -39,8 +40,13 @@ export const upsertJobs = (db: DatabaseSync, rows: JobRow[]): void => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   db.exec('BEGIN');
-  for (const r of rows) stmt.run(r.board, r.queue, r.id, r.state, r.name, r.ts, r.finished, r.failedReason, r.data, r.haystack);
-  db.exec('COMMIT');
+  try {
+    for (const r of rows) stmt.run(r.board, r.queue, r.id, r.state, r.name, r.ts, r.finished, r.failedReason, r.data, r.haystack);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
 };
 
 export const clearState = (db: DatabaseSync, board: string, queue: string, state: string): void => {

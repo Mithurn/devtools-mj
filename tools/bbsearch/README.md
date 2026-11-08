@@ -11,7 +11,7 @@ Bull Board has no job search and its API returns one queue and state per call (a
 - Source of truth stays the board. `sync` only issues GET requests to `<board>/api/queues`, three at a time with a short pause. It never writes, retries or replays jobs.
 - `sync` lists every queue with its counts in one request, then per queue and state:
   - small states (`active`, `waiting`, `delayed`, `paused`, `prioritized`, `waiting-children`): fetched in full and replaced, so state changes show up.
-  - `completed` and `failed`: paged newest first, stopping at the first page with nothing new or older than 14 days.
+  - `completed` and `failed`: paged newest first, stopping at the first page with nothing new or older than 3 days.
 - The index keeps the full job data, the failed reason, state, queue and timestamps. It outlives BullMQ retention, so jobs the board already dropped stay searchable.
 - `find` runs a case-insensitive substring match over job id, data and failed reason. Multiple terms are OR. Boards are searched in order and it stops at the first board with hits (`--all` keeps going).
 - Every hit prints the Bull Board link `<board url>/queue/<queue>/<jobId>`.
