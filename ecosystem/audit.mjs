@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 
 const FILE = join(homedir(), '.config', 'devtools-mj', 'audit.jsonl');
 const MAX_CHARS = 300;
-const TOKEN_LIKE = /[A-Za-z0-9+/=_-]{28,}/g;
+const TOKEN_LIKE = /eyJ[\w-]+\.[\w-]+\.[\w-]+|sntrys_\S+|(?<![\w/.-])[A-Za-z0-9+=_-]{28,}/g;
 
 try {
   const i = JSON.parse(readFileSync(0, 'utf8') || '{}');
