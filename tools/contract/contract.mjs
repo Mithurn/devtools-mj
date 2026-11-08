@@ -3,7 +3,7 @@ import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { activeTicket, load, problems, runItem, save, setActive, workspaceRoot } from './lib.mjs';
 
-const USAGE = `usage: contract new <ticket> <title> | use <ticket> | show [ticket] | run [ticket] | confirm <item> <note> [--file path] | approve [ticket] | status [ticket]
+const USAGE = `usage: contract new <ticket> <title> [--no-activate] | use <ticket> | show [ticket] | run [ticket] | confirm <item> <note> [--file path] | approve [ticket] | status [ticket]
 Contracts live in <workspace>/tasks/contracts/<ticket>.json. Items are {id, title, verify (shell command, exit 0 = done), cwd?} or {manual: true}.`;
 const ws = workspaceRoot();
 const [cmd, a, ...rest] = process.argv.slice(2);
@@ -17,9 +17,10 @@ const table = c => c.items.map(i => {
 
 try {
   if (cmd === 'new') {
-    save(ws, { ticket: a, title: rest.join(' '), status: 'draft', createdAt: Date.now(), scope: '', outOfScope: [], assumptions: [], openQuestions: [], items: [] });
-    setActive(ws, a);
-    console.log(`created draft contract ${a} and made it active. Fill in tasks/contracts/${a}.json`);
+    const noActivate = rest.includes('--no-activate');
+    save(ws, { ticket: a, title: rest.filter(x => x !== '--no-activate').join(' '), status: 'draft', createdAt: Date.now(), scope: '', outOfScope: [], assumptions: [], openQuestions: [], items: [] });
+    if (!noActivate) setActive(ws, a);
+    console.log(`created draft contract ${a}${noActivate ? '' : ' and made it active'}. Fill in tasks/contracts/${a}.json`);
   } else if (cmd === 'use') {
     load(ws, a); setActive(ws, a); console.log(`active contract: ${a}`);
   } else if (cmd === 'show' || cmd === 'status') {
