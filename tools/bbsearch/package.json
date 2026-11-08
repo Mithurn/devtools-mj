@@ -1,0 +1,14 @@
+{
+  "name": "bbsearch",
+  "version": "0.1.0",
+  "description": "Search Bull Board jobs from a local index built through the board's own API",
+  "private": true,
+  "type": "module",
+  "bin": { "bbsearch": "dist/src/cli.js" },
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node --disable-warning=ExperimentalWarning --test dist/test/*.test.js"
+  },
+  "devDependencies": { "@types/node": "^22.0.0", "typescript": "^5.6.0" }
+}
