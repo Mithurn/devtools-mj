@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { BoardApi } from '../src/api.js';
 import { resolveBoards } from '../src/config.js';
+import { decodeJwt, upsertEnvLine } from '../src/cookie.js';
 import { jobLink, parseTerms } from '../src/format.js';
 import { openStore, searchJobs } from '../src/store.js';
 import { syncBoard } from '../src/sync.js';
@@ -47,4 +48,11 @@ test('format helpers and board config', () => {
   const [b] = resolveBoards('zapmail-be', { BBSEARCH_ZAPMAIL_BE_URL: 'https://h/api/v1/ui/', BBSEARCH_ZAPMAIL_BE_COOKIE: 'c=1' });
   assert.deepEqual(b, { name: 'zapmail-be', url: 'https://h/api/v1/ui', cookie: 'c=1' });
   assert.equal(jobLink(b.url, { board: 'b', queue: 'exports.accounts', id: '7', state: '', name: '', ts: 0, finished: 0, failedReason: '', data: '', haystack: '' }), 'https://h/api/v1/ui/queue/exports.accounts/7');
+});
+
+test('cookie helpers decode the token and replace or append the env line', () => {
+  const payload = Buffer.from(JSON.stringify({ email: 'a@b.co', exp: 1900000000 })).toString('base64url');
+  assert.deepEqual(decodeJwt(`h.${payload}.s`), { email: 'a@b.co', exp: 1900000000 });
+  assert.equal(upsertEnvLine('A=1\nK=old\nB=2\n', 'K', 'new'), 'A=1\nK=new\nB=2\n');
+  assert.equal(upsertEnvLine('A=1\n', 'K', 'new'), 'A=1\nK=new\n');
 });

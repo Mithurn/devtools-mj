@@ -1,43 +1,70 @@
 #!/usr/bin/env node
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { isAbsolute, join, resolve } from 'node:path';
 import { activeTicket, load, problems, workspaceRoot } from '../tools/contract/lib.mjs';
+import { evaluate } from './rules.mjs';
 
-const BANNED_IN_TEXT = [
-  [/—/, 'em dash (use commas or separate sentences)'],
-  [/co-authored-by:/i, 'Co-Authored-By trailer'],
-  [/generated with \[?claude code/i, '"Generated with Claude Code" footer'],
-  [/claude\.ai\/code\/session/i, 'Claude session link'],
-  [/claude-session:/i, 'Claude-Session trailer'],
-];
-const CONVENTIONAL = /^(feat|fix|chore|docs|refactor|perf|test|build|ci|style|revert)(\([\w./-]+\))?!?: \S/;
 const READ_ONLY_SQL = /^\s*(select|with|explain|show)\b/i;
 const STOP_MODE = process.argv.includes('--stop');
+const TEAM_REMOTE = /dsouzaalan\//;
+const CHECK_TAIL_LINES = 4;
 
 const block = lines => {
   console.error(`Blocked by gate:\n- ${lines.join('\n- ')}`);
   process.exit(2);
 };
 
-const contractProblems = cwd => {
+const git = (cwd, ...args) => {
+  try {
+    return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return '';
+  }
+};
+
+const effectiveCwd = (command, cwd) => {
+  const m = /(?:^|[;&|(\n]\s*)cd\s+("([^"]+)"|'([^']+)'|(\S+))/.exec(command) ?? /\bgit\s+-C\s+("([^"]+)"|'([^']+)'|(\S+))/.exec(command);
+  const target = m?.[2] ?? m?.[3] ?? m?.[4];
+  if (!target) return cwd;
+  return isAbsolute(target) ? target : resolve(cwd, target.replace(/^~/, homedir()));
+};
+
+const contractIssues = cwd => {
   const ws = workspaceRoot();
   const ticket = activeTicket(ws);
-  if (!ticket) return { ticket: null, issues: [] };
+  if (!ticket) {
+    console.error('gate: no active contract, scope not checked (tasks/contracts/ACTIVE)');
+    return [];
+  }
   try {
     const c = load(ws, ticket);
-    const repo = String(cwd ?? '').startsWith(ws + '/') ? String(cwd).slice(ws.length + 1).split('/')[0] : '';
-    if (c.repos?.length && repo && !c.repos.includes(repo)) return { ticket: null, issues: [] };
-    return { ticket, status: c.status, issues: problems(c).map(p => `contract ${ticket}: ${p}`) };
+    const repo = String(cwd).startsWith(ws + '/') ? String(cwd).slice(ws.length + 1).split('/')[0] : '';
+    if (c.repos?.length && repo && !c.repos.some(r => repo === r || repo.startsWith(`${r}-`))) return [];
+    return problems(c).map(p => `contract ${ticket}: ${p}`);
   } catch (e) {
-    return { ticket, status: 'unknown', issues: [`contract ${ticket}: ${e.message}`] };
+    return [`contract ${ticket}: ${e.message}`];
   }
+};
+
+const runCheck = (label, cmd, args, cwd) => {
+  const r = spawnSync(cmd, args, { cwd, encoding: 'utf8', timeout: 120_000 });
+  if (r.status === 0 || r.error?.code === 'ENOENT') return [];
+  const tail = `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().split('\n').slice(-CHECK_TAIL_LINES).join(' | ');
+  return [`${label} failed: ${tail}`];
 };
 
 try {
   const input = JSON.parse(readFileSync(0, 'utf8') || '{}');
 
   if (STOP_MODE) {
-    const { status, issues } = contractProblems(input.cwd);
-    if (status === 'approved' && issues.length) block(['the approved contract is not complete, finish or ask before stopping', ...issues]);
+    const ws = workspaceRoot();
+    const ticket = activeTicket(ws);
+    if (!ticket) process.exit(0);
+    const c = load(ws, ticket);
+    const issues = contractIssues(input.cwd ?? ws);
+    if (c.status === 'approved' && issues.length) block(['the approved contract is not complete, finish or ask before stopping', ...issues]);
     process.exit(0);
   }
 
@@ -49,30 +76,26 @@ try {
   }
 
   const command = input.tool_input?.command ?? '';
-  const bare = command
-    .replace(/<<-?\s*(['"]?)(\w+)\1[^\n]*\n[\s\S]*?\n\s*\2\b/g, ' ')
-    .replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, ' ');
-  const isCommit = /(^|[;&|(\n]\s*)(?:\w+=\S+\s+)*git\s+(?:-C\s+\S+\s+)?commit\b/.test(bare);
-  const isPrWrite = /(^|[;&|(\n]\s*)gh\s+pr\s+(create|edit)\b/.test(bare);
-  const isPush = /(^|[;&|(\n]\s*)git\s+(?:-C\s+\S+\s+)?push\b/.test(bare);
-  const isPrCreate = /(^|[;&|(\n]\s*)gh\s+pr\s+create\b/.test(bare);
-  if (!isCommit && !isPrWrite && !isPush) process.exit(0);
-
-  const issues = [];
-  if (isCommit || isPrWrite) {
-    for (const [re, why] of BANNED_IN_TEXT) if (re.test(command)) issues.push(`${isCommit ? 'commit message' : 'PR text'} contains ${why}`);
-  }
-  if (isPrCreate) {
-    const m = /(?:--title|-t)\s+(?:"([^"]*)"|'([^']*)')/.exec(command);
-    const title = m?.[1] ?? m?.[2];
-    if (title && !CONVENTIONAL.test(title)) issues.push(`PR title is not conventional (type(scope): summary): ${title}`);
-    if (/\n#{1,4} /.test(command)) issues.push('PR body has headers; use short bullets only');
-  }
-  if (isPush || isPrCreate) {
-    const r = contractProblems(input.cwd);
-    if (!r.ticket) console.error('gate: no active contract, scope not checked (tasks/contracts/ACTIVE)');
-    issues.push(...r.issues);
-  }
+  const cwd = effectiveCwd(command, input.cwd ?? process.cwd());
+  const ws = workspaceRoot();
+  const issues = evaluate(command, {
+    cwd,
+    isTeamRepo: () => TEAM_REMOTE.test(git(cwd, 'remote', 'get-url', 'origin')),
+    branch: () => git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD'),
+    prBase: cmd => {
+      const arg = /gh\s+pr\s+merge\s+((?!-)\S+)/.exec(cmd)?.[1];
+      try {
+        return execFileSync('gh', ['pr', 'view', ...(arg ? [arg] : []), '--json', 'baseRefName', '--jq', '.baseRefName'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      } catch {
+        return undefined;
+      }
+    },
+    contractIssues: () => contractIssues(cwd),
+    diffChecks: () => [
+      ...runCheck('format check (run .claude/bin/fmt-changed)', join(ws, '.claude', 'bin', 'churn-check'), [cwd], cwd),
+      ...runCheck('comment check (strip narrative comments)', join(homedir(), 'bin', 'comment-check'), [], cwd),
+    ],
+  });
   if (issues.length) block(issues);
 } catch (e) {
   block([`gate crashed, failing closed: ${e.message}`]);

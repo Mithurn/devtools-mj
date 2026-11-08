@@ -12,6 +12,18 @@ How the workspace is wired, and how to rebuild it on a new laptop.
 | Zapmail admin panel | Claude in Chrome, "Claude" profile | Read-only pages only. |
 | Refresh board access | paste fresh `bull_board_token` cookies in `~/.config/devtools-mj/.env` | Expire about daily. |
 
+## Workflow scripts
+
+| Script | Purpose |
+| --- | --- |
+| `gate.mjs`, `rules.mjs` | Claude Code hook: push, PR, merge, commit text, branch names, protected branches, migrations, deploys, read-only SQL, contract and completion gates. Tests: `node --test ecosystem/*.test.mjs` |
+| `audit.mjs` | Append-only audit log of tool calls |
+| `evidence.mjs` | Screenshots of local apps, dry-run-by-default `gh pr edit --attach` |
+| `ticket-worktree.sh` | One isolated worktree and branch `mithurn/<short-name>` per ticket |
+| `dbhub-readonly-check.mjs` | Proves DBHub refuses writes, local database only |
+| `pj.mjs` | Staging secrets through the older Pandora Jar API, production blocked |
+| `secrets.sh`, `bootstrap.sh` | Encrypted backup and new-laptop setup |
+
 ## What lives where
 
 - Tools and scripts: this repo (`tools/`, `ecosystem/`).

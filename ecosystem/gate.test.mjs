@@ -64,6 +64,10 @@ test('contract only applies to its repos', () => {
   assert.equal(run({ tool_name: 'Bash', cwd: join(ws, 'other'), tool_input: { command: 'git push' } }).status, 0);
   mkdirSync(join(ws, 'clavis'), { recursive: true });
   assert.equal(run({ tool_name: 'Bash', cwd: join(ws, 'clavis'), tool_input: { command: 'git push' } }).status, 2);
+  mkdirSync(join(ws, 'clavis-list-workspaces'), { recursive: true });
+  assert.equal(run({ tool_name: 'Bash', cwd: join(ws, 'clavis-list-workspaces'), tool_input: { command: 'git push' } }).status, 2);
+  mkdirSync(join(ws, 'clavisx'), { recursive: true });
+  assert.equal(run({ tool_name: 'Bash', cwd: join(ws, 'clavisx'), tool_input: { command: 'git push' } }).status, 0);
 });
 
 test('stop hook only blocks an approved incomplete contract', () => {

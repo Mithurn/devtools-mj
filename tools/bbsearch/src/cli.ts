@@ -7,8 +7,9 @@ const { httpApi } = await import('./api.js');
 const { countJobs, openStore, searchJobs, syncedAt } = await import('./store.js');
 const { syncBoard } = await import('./sync.js');
 const { formatLine, parseTerms, toJson } = await import('./format.js');
+const { setCookie } = await import('./cookie.js');
 
-const USAGE = `usage: bbsearch sync | status | find <term[,term]|-> | job <queue> <id>
+const USAGE = `usage: bbsearch sync | status | cookie <board> | find <term[,term]|-> | job <queue> <id>
   --board a,b,c (order = search order)  --all (keep going after the first board with hits)
   --state failed,completed  --limit <n>  --json  --full (print job data)  --sync (sync before searching)`;
 
@@ -31,6 +32,11 @@ const main = async () => {
   const [cmd, term] = positionals;
   if (!cmd) throw new Error(USAGE);
   loadEnvFile();
+  if (cmd === 'cookie') {
+    if (!term) throw new Error('usage: bbsearch cookie <board>  (copy the bull_board_token from the board page first)');
+    console.log(setCookie(term));
+    return;
+  }
   const boards = resolveBoards(values.board);
   const db = openStore(DB_FILE);
 

@@ -50,6 +50,8 @@ export const problems = (c, now = Date.now()) => {
     const e = i.evidence;
     if (!e) out.push(`not verified: ${i.id} ${i.title}`);
     else if (e.exit !== 0) out.push(`failing: ${i.id} ${i.title}`);
+    else if (e.file && !existsSync(e.file)) out.push(`evidence file missing: ${i.id} ${e.file}`);
+    else if (i.manual && !e.output && !e.file) out.push(`manual item needs a note or file: ${i.id}`);
     else if (now - e.ranAt > EVIDENCE_MAX_AGE_MS) out.push(`stale evidence (rerun): ${i.id} ${i.title}`);
   }
   return out;

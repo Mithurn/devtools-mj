@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import { existsSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { activeTicket, load, problems, runItem, save, setActive, workspaceRoot } from './lib.mjs';
 
-const USAGE = `usage: contract new <ticket> <title> | use <ticket> | show [ticket] | run [ticket] | confirm <item> <note> | approve [ticket] | status [ticket]
+const USAGE = `usage: contract new <ticket> <title> | use <ticket> | show [ticket] | run [ticket] | confirm <item> <note> [--file path] | approve [ticket] | status [ticket]
 Contracts live in <workspace>/tasks/contracts/<ticket>.json. Items are {id, title, verify (shell command, exit 0 = done), cwd?} or {manual: true}.`;
 const ws = workspaceRoot();
 const [cmd, a, ...rest] = process.argv.slice(2);
@@ -35,8 +37,13 @@ try {
     const c = load(ws, activeTicket(ws) ?? '');
     const item = c.items.find(i => i.id === a);
     if (!item) throw new Error(`no item ${a}`);
-    item.evidence = { ranAt: Date.now(), exit: 0, output: rest.join(' ') };
-    save(ws, c); console.log(`confirmed ${a}`);
+    const fi = rest.indexOf('--file');
+    const file = fi === -1 ? undefined : resolve(rest[fi + 1] ?? '');
+    if (file && !existsSync(file)) throw new Error(`evidence file not found: ${file}`);
+    const note = rest.filter((_, i) => fi === -1 || (i !== fi && i !== fi + 1)).join(' ');
+    if (!note && !file) throw new Error('give a note and/or --file <path>');
+    item.evidence = { ranAt: Date.now(), exit: 0, output: note, ...(file ? { file, bytes: statSync(file).size } : {}) };
+    save(ws, c); console.log(`confirmed ${a}${file ? ` with ${file}` : ''}`);
   } else if (cmd === 'approve') {
     const c = load(ws, ticket());
     const open = (c.openQuestions ?? []).filter(q => !q.answer);

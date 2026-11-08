@@ -31,6 +31,15 @@ BBSEARCH_BOARDS=clavis,zapmail-be,automation
 
 Board name `zapmail-be` maps to `BBSEARCH_ZAPMAIL_BE_*`. The cookie is only needed for boards behind login.
 
+## Refreshing the login cookies
+
+The Zapmail BE and automation boards use a `bull_board_token` cookie that lasts about a day. One click each:
+
+1. Create a bookmark named "Copy board cookie" with this as its URL (a bookmarklet):
+   `javascript:(()=>{const c=document.cookie.split('; ').find(x=>x.startsWith('bull_board_token='));navigator.clipboard.writeText(c||'').then(()=>alert(c?'copied':'no cookie, sign in first'))})()`
+2. On the board tab, click the bookmark.
+3. Run `bbsearch cookie zapmail-be` (or `automation`). It reads the clipboard (macOS `pbpaste`), checks it is a live token, and updates the env file. It never prints the token.
+
 ## Usage
 
 ```
@@ -38,6 +47,7 @@ bbsearch sync [--board a,b]            update the local index
 bbsearch find <term[,term]|-> [--board a,b] [--all] [--state failed,completed] [--limit n] [--json] [--full] [--sync]
 bbsearch job <queue> <jobId> [--board b]   full live job from the board (stacktrace included)
 bbsearch status
+bbsearch cookie <board>                    update a board login cookie from the clipboard
 ```
 
 ## Limits
