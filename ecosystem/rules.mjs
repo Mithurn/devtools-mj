@@ -70,6 +70,7 @@ export const evaluate = (command, ctx) => {
     const w = PR_TEXT_WORDS.exec(text)?.[0];
     if (w) issues.push(`PR text must not say "${w}" (describe the change, not how it was tested)`);
   }
+  if ((isPrCreate || isPrEdit) && /--attach\s+["']?[^\s"']*\.term\.png/.test(command)) issues.push('PR images must be real screenshots (Bull Board, app, admin panel), not rendered text');
   if (isPrComment) {
     if (ctx.prCommentCount(command) >= MAX_PR_COMMENTS) issues.push('a PR gets one description and at most one comment: edit the description (gh pr edit) instead of commenting again');
     if (/\n#{1,4} /.test(command)) issues.push('PR comment has headers; short bullets only');

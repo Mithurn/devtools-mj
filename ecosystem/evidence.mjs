@@ -9,10 +9,11 @@ const DEFAULT_WIDTHS = [390, 768, 1280];
 const DEFAULT_HEIGHT = 800;
 const SETTLE_MS = 800;
 const TERM_WIDTH = 1000;
+const TERM_SUFFIX = '.term.png';
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\]|[^.]+\.localhost|[^.]+\.test)$/;
 const USAGE = `usage: evidence shot <url> <out.png> [--width 1280] [--height 800] [--full]
        evidence shots <url> <outdir> [--widths 390,768,1280] [--full]
-       evidence term <file|-> <out.png> [--width 1000]
+       evidence term <file|-> <out>.term.png [--width 1000]   (for notes only, never attached to a PR)
        evidence attach <pr> <file>... [--repo owner/name] [--yes]
 term renders command output (a text file or stdin) as one image.
 Screenshots only for local hosts (localhost, 127.0.0.1, *.localhost, *.test) unless --allow-host is given.
@@ -64,6 +65,7 @@ try {
   } else if (cmd === 'term') {
     const [file, out] = rest;
     if (!file || !out) throw new Error(USAGE);
+    if (!out.endsWith(TERM_SUFFIX)) throw new Error(`name the output *${TERM_SUFFIX}: rendered text is not real evidence and PR attach refuses it`);
     const text = readFileSync(file === '-' ? 0 : file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
     const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const browser = await chromium().launch();
@@ -80,6 +82,8 @@ try {
     const [pr, ...files] = rest;
     if (!pr || !files.length) throw new Error(USAGE);
     for (const f of files) if (!existsSync(f)) throw new Error(`missing file ${f}`);
+    const fake = files.filter(f => f.endsWith(TERM_SUFFIX));
+    if (fake.length) throw new Error(`refusing to attach rendered text (${fake.join(', ')}): PR images must be real screenshots of the Bull Board, the app or the admin panel`);
     const ghArgs = ['pr', 'edit', pr, ...(val('--repo') ? ['--repo', val('--repo')] : []), ...files.flatMap(f => ['--attach', `${resolve(f)}#${basename(f, '.png')}`])];
     if (!flag('--yes')) console.log(`dry run, would run: gh ${ghArgs.join(' ')}`);
     else console.log(execFileSync('gh', ghArgs, { encoding: 'utf8' }));

@@ -96,3 +96,8 @@ test('PR comments: one at most, same text rules', () => {
 test('contract block explains to run the fix separately', () => {
   bad('git push', { contractIssues: () => ['contract T: failing: i1'] }, /separate|own command/);
 });
+
+test('rendered text images are not attached to PRs', () => {
+  bad('gh pr edit 5 --attach "./out/run.term.png#run"', {}, /real screenshots/);
+  ok('gh pr edit 5 --attach "./out/bullboard.png#job"');
+});
