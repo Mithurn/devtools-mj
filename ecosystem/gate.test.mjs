@@ -76,3 +76,13 @@ test('stop hook only blocks an approved incomplete contract', () => {
   setContract({ ticket: 'T1', status: 'approved', items: [{ id: 'a', title: 'a', verify: 'true' }] });
   assert.equal(run({}, ['--stop']).status, 2);
 });
+
+test('large unbounded reads are blocked, slices and small files pass', () => {
+  const big = join(ws, 'big.txt');
+  writeFileSync(big, 'x'.repeat(150_000));
+  const read = input => run({ tool_name: 'Read', cwd: ws, tool_input: input });
+  assert.equal(read({ file_path: big }).status, 2);
+  assert.equal(read({ file_path: big, limit: 50 }).status, 0);
+  writeFileSync(join(ws, 'small.txt'), 'x');
+  assert.equal(read({ file_path: join(ws, 'small.txt') }).status, 0);
+});

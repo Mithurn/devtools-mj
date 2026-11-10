@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { activeTicket, load, problems, workspaceRoot } from '../tools/contract/lib.mjs';
@@ -10,6 +10,8 @@ const READ_ONLY_SQL = /^\s*(select|with|explain|show)\b/i;
 const STOP_MODE = process.argv.includes('--stop');
 const TEAM_REMOTE = /dsouzaalan\//;
 const CHECK_TAIL_LINES = 4;
+const MAX_UNBOUNDED_READ_BYTES = 100_000;
+const PAGED_FILE = /\.(png|jpe?g|gif|webp|pdf|ipynb)$/i;
 
 const block = lines => {
   console.error(`Blocked by gate:\n- ${lines.join('\n- ')}`);
@@ -66,6 +68,13 @@ try {
     const c = load(ws, ticket);
     const issues = contractIssues(input.cwd ?? ws);
     if (c.status === 'approved' && issues.length) block(['the approved contract is not complete, finish the items, or stop and ask the user (asking is allowed, ask once)', ...issues]);
+    process.exit(0);
+  }
+
+  if (input.tool_name === 'Read') {
+    const f = String(input.tool_input?.file_path ?? '');
+    const bounded = input.tool_input?.limit || input.tool_input?.offset || input.tool_input?.pages;
+    if (!bounded && !PAGED_FILE.test(f) && existsSync(f) && statSync(f).size > MAX_UNBOUNDED_READ_BYTES) block([`${f} is ${Math.round(statSync(f).size / 1000)} KB: grep for what you need or read a slice with offset and limit`]);
     process.exit(0);
   }
 
