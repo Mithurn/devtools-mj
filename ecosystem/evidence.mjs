@@ -9,9 +9,12 @@ const DEFAULT_WIDTHS = [390, 768, 1280];
 const DEFAULT_HEIGHT = 800;
 const SETTLE_MS = 800;
 const TERM_WIDTH = 1000;
+const EXPECT_TIMEOUT_MS = 15_000;
+const BOARD_WIDTH = 1440;
 const TERM_SUFFIX = '.term.png';
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\]|[^.]+\.localhost|[^.]+\.test)$/;
-const USAGE = `usage: evidence shot <url> <out.png> [--width 1280] [--height 800] [--full]
+const USAGE = `usage: evidence shot <url> <out.png> [--width 1280] [--height 800] [--full] [--click <text>]... [--expect <text>]...
+       evidence board <local bull board job url> <out.png> [--click "Error"] [--expect "text that must be visible"]   (whole page, never cropped)
        evidence shots <url> <outdir> [--widths 390,768,1280] [--full]
        evidence term <file|-> <out>.term.png [--width 1000]   (for notes only, never attached to a PR)
        evidence attach <pr> <file>... [--repo owner/name] [--yes]
@@ -23,7 +26,9 @@ const args = process.argv.slice(2);
 const flag = n => args.includes(n);
 const val = (n, d) => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
 const positional = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1].startsWith('--') && !['--full', '--yes'].includes(args[i - 1])));
-const [cmd, ...rest] = positional;
+const all = n => args.flatMap((a, i) => (a === n ? [args[i + 1]] : []));
+const positionalClean = positional.filter(a => !all('--click').includes(a) && !all('--expect').includes(a));
+const [cmd, ...rest] = positionalClean;
 
 const chromium = () => {
   const bases = [process.env.EVIDENCE_PLAYWRIGHT_DIR, join(workspaceRoot(), 'clavis'), join(workspaceRoot(), 'zapmail-fe-nextjs')].filter(Boolean);
@@ -44,6 +49,17 @@ const shoot = async (browser, url, out, width, height, full) => {
   const page = await browser.newPage({ viewport: { width, height } });
   await page.goto(url, { waitUntil: 'networkidle', timeout: 60_000 });
   await page.waitForTimeout(SETTLE_MS);
+  for (const text of all('--click')) {
+    await page.getByText(text, { exact: true }).first().click({ timeout: EXPECT_TIMEOUT_MS });
+    await page.waitForTimeout(SETTLE_MS);
+  }
+  for (const text of all('--expect')) {
+    const loc = page.getByText(text).first();
+    await loc.waitFor({ state: 'visible', timeout: EXPECT_TIMEOUT_MS }).catch(() => { throw new Error(`expected text not on the page, no screenshot taken: ${text}`); });
+    const box = await loc.boundingBox();
+    const pageHeight = full ? Infinity : height;
+    if (box && box.y + box.height > pageHeight) throw new Error(`expected text is below the visible area, add --full: ${text}`);
+  }
   mkdirSync(dirname(out), { recursive: true });
   await page.screenshot({ path: out, fullPage: full });
   await page.close();
@@ -51,13 +67,13 @@ const shoot = async (browser, url, out, width, height, full) => {
 };
 
 try {
-  if (cmd === 'shot' || cmd === 'shots') {
+  if (cmd === 'shot' || cmd === 'shots' || cmd === 'board') {
     const [url, out] = rest;
     if (!url || !out) throw new Error(USAGE);
     checkHost(url);
     const browser = await chromium().launch();
     try {
-      if (cmd === 'shot') await shoot(browser, url, resolve(out), Number(val('--width', 1280)), Number(val('--height', DEFAULT_HEIGHT)), flag('--full'));
+      if (cmd === 'shot' || cmd === 'board') await shoot(browser, url, resolve(out), Number(val('--width', cmd === 'board' ? BOARD_WIDTH : 1280)), Number(val('--height', DEFAULT_HEIGHT)), cmd === 'board' || flag('--full'));
       else for (const w of String(val('--widths', DEFAULT_WIDTHS.join(','))).split(',').map(Number)) await shoot(browser, url, join(resolve(out), `w${w}.png`), w, DEFAULT_HEIGHT, flag('--full'));
     } finally {
       await browser.close();
