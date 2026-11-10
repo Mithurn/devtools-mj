@@ -35,8 +35,46 @@ export const setActive = (ws, ticket) => {
   writeFileSync(activeFile(ws), ticket + '\n');
 };
 
-export const runItem = (ws, item) => {
-  const r = spawnSync('sh', ['-c', item.verify], { cwd: item.cwd ? resolve(ws, item.cwd) : ws, encoding: 'utf8', timeout: VERIFY_TIMEOUT_MS });
+const tokens = str => [...str.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map(m => m[1] ?? m[2] ?? m[3]);
+
+export const absenceTargets = verify => {
+  const out = [];
+  for (const m of verify.matchAll(/(?:^|[;&|(]\s*)!\s+([^;&|\n]+)/g)) {
+    const t = tokens(m[1]);
+    if (t[0] === 'git' && t[1] === 'show' && t[2]) out.push({ kind: 'git', ref: t[2] });
+    else if (t[0] === 'grep' || t[0] === 'rg') {
+      const args = t.slice(1).filter(x => !x.startsWith('-'));
+      for (const f of args.slice(1)) out.push({ kind: 'file', path: f });
+    }
+  }
+  for (const m of verify.matchAll(/!\s+git\s+show\s+(\S+)/g)) if (!out.some(o => o.ref === m[1])) out.push({ kind: 'git', ref: m[1] });
+  return out;
+};
+
+const missingTarget = (verify, cwd) => {
+  for (const t of absenceTargets(verify)) {
+    if (t.kind === 'file' && !existsSync(resolve(cwd, t.path))) return `absence check on a missing file: ${t.path}`;
+    if (t.kind === 'git') {
+      const r = spawnSync('git', ['-C', cwd, 'cat-file', '-e', t.ref], { encoding: 'utf8' });
+      if (r.status !== 0) return `absence check on a missing git object (branch or file not found): ${t.ref}`;
+    }
+  }
+  return '';
+};
+
+export const itemCwd = (ws, item, c = {}) => {
+  const worktree = c.cwd && (!item.cwd || item.cwd === '.' || (c.repos ?? []).includes(item.cwd)) ? c.cwd : item.cwd;
+  return worktree ? resolve(ws, worktree) : ws;
+};
+
+export const runItem = (ws, item, c = {}) => {
+  const cwd = itemCwd(ws, item, c);
+  const missing = missingTarget(item.verify, cwd);
+  if (missing) {
+    item.evidence = { ranAt: Date.now(), exit: 1, output: missing };
+    return false;
+  }
+  const r = spawnSync('sh', ['-c', item.verify], { cwd, encoding: 'utf8', timeout: VERIFY_TIMEOUT_MS });
   const out = `${r.stdout ?? ''}${r.stderr ?? ''}`.trim();
   item.evidence = { ranAt: Date.now(), exit: r.status ?? -1, output: out.slice(-OUTPUT_TAIL_CHARS) };
   return item.evidence.exit === 0;
@@ -45,6 +83,7 @@ export const runItem = (ws, item) => {
 export const problems = (c, now = Date.now()) => {
   const out = [];
   if (c.status === 'draft') out.push('contract is still a draft, it needs human approval (contract approve)');
+  for (const a of (c.amendments ?? []).filter(x => typeof x === 'object')) if (!a.approved) out.push(`amendment pending approval: ${a.item} (${a.reason})`);
   for (const q of c.openQuestions ?? []) if (!q.answer) out.push(`open question: ${q.q}`);
   for (const i of c.items) {
     const e = i.evidence;

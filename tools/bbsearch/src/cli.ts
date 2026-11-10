@@ -6,12 +6,14 @@ const { DB_FILE, DEFAULT_LIMIT, STALE_WARN_MS, loadEnvFile, resolveBoards } = aw
 const { httpApi } = await import('./api.js');
 const { countJobs, openStore, searchJobs, syncedAt } = await import('./store.js');
 const { syncBoard } = await import('./sync.js');
-const { formatLine, parseTerms, toJson } = await import('./format.js');
+const { formatLine, parseTerms, redact, toJson } = await import('./format.js');
 const { setCookie } = await import('./cookie.js');
 
 const USAGE = `usage: bbsearch sync | status | cookie <board> | find <term[,term]|-> | job <queue> <id>
   --board a,b,c (order = search order)  --all (keep going after the first board with hits)
-  --state failed,completed  --limit <n>  --json  --full (print job data)  --sync (sync before searching)`;
+  --state failed,completed  --limit <n>  --json  --full (print job data)  --sync (sync before searching)
+  --exact (treat the whole term as one phrase, no splitting)  --raw (do not redact passwords, keys and tokens in job data)
+  job ids: use the id printed by find (for exports, the export id); platform:<id> does not work`;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -23,6 +25,8 @@ const { values, positionals } = parseArgs({
     json: { type: 'boolean', default: false },
     full: { type: 'boolean', default: false },
     sync: { type: 'boolean', default: false },
+    exact: { type: 'boolean', default: false },
+    raw: { type: 'boolean', default: false },
   },
 });
 
@@ -62,12 +66,13 @@ const main = async () => {
   if (cmd === 'job') {
     const [, queue, id] = positionals;
     if (!queue || !id) throw new Error(USAGE);
-    console.log(JSON.stringify(await httpApi(boards[0]).job(queue, id), null, 2));
+    const job = await httpApi(boards[0]).job(queue, id);
+    console.log(JSON.stringify(values.raw ? job : redact(job), null, 2));
     return;
   }
   if (cmd !== 'find' || !term) throw new Error(USAGE);
 
-  const terms = parseTerms(term === '-' ? readFileSync(0, 'utf8') : term);
+  const terms = parseTerms(term === '-' ? readFileSync(0, 'utf8') : term, values.exact);
   const limit = Number(values.limit ?? DEFAULT_LIMIT);
   const states = values.state?.split(',');
   let total = 0;
@@ -85,7 +90,7 @@ const main = async () => {
     }
     const started = Date.now();
     const { rows, total: n } = searchJobs(db, board.name, terms, states, limit);
-    for (const r of rows) console.log(values.json ? JSON.stringify(toJson(board.url, r)) : formatLine(board.url, r, values.full));
+    for (const r of rows) console.log(values.json ? JSON.stringify(toJson(board.url, r, values.raw)) : formatLine(board.url, r, values.full, values.raw));
     console.error(`--- ${board.name}: ${n} jobs${n > limit ? `, showing ${limit}` : ''}, ${Date.now() - started}ms`);
     total += n;
     if (n && !values.all) return;

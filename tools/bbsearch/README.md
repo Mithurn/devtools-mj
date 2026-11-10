@@ -55,3 +55,9 @@ bbsearch cookie <board>                    update a board login cookie from the 
 - The index file `~/.cache/devtools-mj/bbsearch.db` holds full job data, credentials included. It is readable only by you. Delete it when done.
 - Jobs removed before the first sync cannot be recovered. State changes on old jobs show after the next sync. `find` warns when the index is over 15 minutes old.
 - A first sync of a large board takes a couple of minutes. Later syncs take under a minute.
+
+## Redaction, exact search, job ids
+
+- `job`, `find --full` and `find --json` redact passwords, API keys, tokens and cookies in job data by default. Add `--raw` when you need the real value.
+- `find` splits the term on commas and spaces and matches any part. Add `--exact` to match the whole phrase (for example `"required scope"`).
+- `job <queue> <id>` takes the id printed by `find`. For exports use the export id, `platform:<id>` does not work.

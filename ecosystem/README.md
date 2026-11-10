@@ -18,7 +18,9 @@ How the workspace is wired, and how to rebuild it on a new laptop.
 | --- | --- |
 | `gate.mjs`, `rules.mjs` | Claude Code hook: push, PR, merge, commit text, branch names, protected branches, migrations, deploys, read-only SQL, contract and completion gates. Tests: `node --test ecosystem/*.test.mjs` |
 | `audit.mjs` | Append-only audit log of tool calls |
-| `evidence.mjs` | Screenshots of local apps, dry-run-by-default `gh pr edit --attach` |
+| `evidence.mjs` | Screenshots of local apps, `term` renders command output as an image, dry-run-by-default `gh pr edit --attach` |
+| `testacc.mjs` | `list` and `run <platform> -- <cmd>`: loads test account values from `notes/test accs.md` into the command's env without printing them |
+| `run-ts.sh` | Runs a scratchpad `.ts` file with a worktree's tsconfig and node_modules |
 | `ticket-worktree.sh` | One isolated worktree and branch `mithurn/<short-name>` per ticket |
 | `dbhub-readonly-check.mjs` | Proves DBHub refuses writes, local database only |
 | `pj.mjs` | Staging secrets through the older Pandora Jar API, production blocked |

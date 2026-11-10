@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { workspaceRoot } from '../tools/contract/lib.mjs';
 
 const DEFAULT_WIDTHS = [390, 768, 1280];
 const DEFAULT_HEIGHT = 800;
 const SETTLE_MS = 800;
+const TERM_WIDTH = 1000;
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\]|[^.]+\.localhost|[^.]+\.test)$/;
 const USAGE = `usage: evidence shot <url> <out.png> [--width 1280] [--height 800] [--full]
        evidence shots <url> <outdir> [--widths 390,768,1280] [--full]
+       evidence term <file|-> <out.png> [--width 1000]
        evidence attach <pr> <file>... [--repo owner/name] [--yes]
+term renders command output (a text file or stdin) as one image.
 Screenshots only for local hosts (localhost, 127.0.0.1, *.localhost, *.test) unless --allow-host is given.
 attach prints the gh command and runs it only with --yes (it uploads images into the PR body).`;
 
@@ -55,6 +58,21 @@ try {
     try {
       if (cmd === 'shot') await shoot(browser, url, resolve(out), Number(val('--width', 1280)), Number(val('--height', DEFAULT_HEIGHT)), flag('--full'));
       else for (const w of String(val('--widths', DEFAULT_WIDTHS.join(','))).split(',').map(Number)) await shoot(browser, url, join(resolve(out), `w${w}.png`), w, DEFAULT_HEIGHT, flag('--full'));
+    } finally {
+      await browser.close();
+    }
+  } else if (cmd === 'term') {
+    const [file, out] = rest;
+    if (!file || !out) throw new Error(USAGE);
+    const text = readFileSync(file === '-' ? 0 : file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
+    const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const browser = await chromium().launch();
+    try {
+      const page = await browser.newPage({ viewport: { width: Number(val('--width', TERM_WIDTH)), height: 200 } });
+      await page.setContent(`<body style="margin:0;background:#111;color:#ddd"><pre style="margin:0;padding:16px;font:13px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word">${esc}</pre></body>`);
+      mkdirSync(dirname(resolve(out)), { recursive: true });
+      await page.screenshot({ path: resolve(out), fullPage: true });
+      console.log(resolve(out));
     } finally {
       await browser.close();
     }

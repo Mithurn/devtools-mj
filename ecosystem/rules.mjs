@@ -5,6 +5,9 @@ const BANNED_IN_TEXT = [
   [/claude\.ai\/code\/session/i, 'Claude session link'],
   [/claude-session:/i, 'Claude-Session trailer'],
 ];
+const PR_TEXT_WORDS = /\b(mock(?:s|ed|ing)?|locally|local|localhost)\b/i;
+const MAX_PR_COMMENTS = 1;
+const CONTRACT_HINT = 'contract problems block push, PR and merge: run the fix as its own command first, then run the push alone';
 const CONVENTIONAL = /^(feat|fix|chore|docs|refactor|perf|test|build|ci|style|revert)(\([\w./-]+\))?!?: \S/;
 const PROTECTED_BRANCH = /^(main|master|staging|production|prod)$/;
 const BRANCH_POLICY = /^(mithurn|feature)\/[a-z0-9][a-z0-9._/-]*$/;
@@ -48,6 +51,7 @@ export const evaluate = (command, ctx) => {
   const isPush = verb(bare, String.raw`git\s+(?:-C\s+\S+\s+)?push\b`);
   const isPrCreate = verb(bare, String.raw`gh\s+pr\s+create\b`);
   const isPrEdit = verb(bare, String.raw`gh\s+pr\s+edit\b`);
+  const isPrComment = verb(bare, String.raw`gh\s+pr\s+comment\b`);
   const isMerge = verb(bare, String.raw`gh\s+pr\s+merge\b`);
 
   if (!cwd.includes('xeno-grow')) {
@@ -58,8 +62,17 @@ export const evaluate = (command, ctx) => {
   if (TRIGGER_DEPLOY.test(bare)) issues.push('blocked: trigger.dev deploy needs an explicit --env staging');
   if (verb(bare, String.raw`psql\b`) && SQL_WRITE.test(command) && !LOCAL_HOST.test(command)) issues.push('blocked: psql write against a non-local database');
 
-  if (isCommit || isPrCreate || isPrEdit) {
+  if (isCommit || isPrCreate || isPrEdit || isPrComment) {
     for (const [re, why] of BANNED_IN_TEXT) if (re.test(command)) issues.push(`${isCommit ? 'commit message' : 'PR text'} contains ${why}`);
+  }
+  if (isPrCreate || isPrEdit || isPrComment) {
+    const text = command.replace(/--attach\s+("[^"]*"|'[^']*'|\S+)/g, '');
+    const w = PR_TEXT_WORDS.exec(text)?.[0];
+    if (w) issues.push(`PR text must not say "${w}" (describe the change, not how it was tested)`);
+  }
+  if (isPrComment) {
+    if (ctx.prCommentCount(command) >= MAX_PR_COMMENTS) issues.push('a PR gets one description and at most one comment: edit the description (gh pr edit) instead of commenting again');
+    if (/\n#{1,4} /.test(command)) issues.push('PR comment has headers; short bullets only');
   }
   if (isPrCreate) {
     const m = /(?:--title|-t)\s+(?:"([^"]*)"|'([^']*)')/.exec(command);
@@ -86,6 +99,9 @@ export const evaluate = (command, ctx) => {
     const base = ctx.prBase(command);
     if (base !== MERGE_BASE_ALLOWED) issues.push(`only PRs into ${MERGE_BASE_ALLOWED} may be merged here (this one targets ${base ?? 'unknown'})`);
   }
-  if (isPush || isPrCreate || isMerge) issues.push(...ctx.contractIssues());
+  if (isPush || isPrCreate || isMerge) {
+    const c = ctx.contractIssues();
+    if (c.length) issues.push(...c, CONTRACT_HINT);
+  }
   return issues;
 };

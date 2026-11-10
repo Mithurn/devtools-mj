@@ -59,12 +59,13 @@ try {
   const input = JSON.parse(readFileSync(0, 'utf8') || '{}');
 
   if (STOP_MODE) {
+    if (input.stop_hook_active) process.exit(0);
     const ws = workspaceRoot();
     const ticket = activeTicket(ws);
     if (!ticket) process.exit(0);
     const c = load(ws, ticket);
     const issues = contractIssues(input.cwd ?? ws);
-    if (c.status === 'approved' && issues.length) block(['the approved contract is not complete, finish or ask before stopping', ...issues]);
+    if (c.status === 'approved' && issues.length) block(['the approved contract is not complete, finish the items, or stop and ask the user (asking is allowed, ask once)', ...issues]);
     process.exit(0);
   }
 
@@ -88,6 +89,14 @@ try {
         return execFileSync('gh', ['pr', 'view', ...(arg ? [arg] : []), '--json', 'baseRefName', '--jq', '.baseRefName'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
       } catch {
         return undefined;
+      }
+    },
+    prCommentCount: cmd => {
+      const arg = /gh\s+pr\s+comment\s+((?!-)\S+)/.exec(cmd)?.[1];
+      try {
+        return Number(execFileSync('gh', ['pr', 'view', ...(arg ? [arg] : []), '--json', 'comments', '--jq', '.comments|length'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim());
+      } catch {
+        return 0;
       }
     },
     contractIssues: () => contractIssues(cwd),

@@ -7,6 +7,7 @@ const ctx = (over = {}) => ({
   isTeamRepo: () => true,
   branch: () => 'mithurn/list-workspaces',
   prBase: () => 'staging',
+  prCommentCount: () => 0,
   contractIssues: () => [],
   diffChecks: () => [],
   ...over,
@@ -82,4 +83,16 @@ test('text lint and contract issues still apply', () => {
 test('words inside heredocs and quotes do not count as commands', () => {
   ok("cat > x.md <<'EOF'\ngh workflow run\nnpm publish\nEOF");
   ok('echo "git push origin main"');
+});
+
+test('PR comments: one at most, same text rules', () => {
+  ok('gh pr comment 5 --body "- fixed the limit"');
+  bad('gh pr comment 5 --body "- more"', { prCommentCount: () => 1 }, /at most one comment/);
+  bad('gh pr comment 5 --body "- tested with a mock server"', {}, /must not say "mock"/);
+  bad('gh pr edit 5 --body "- ran locally"', {}, /must not say "locally"/);
+  ok('gh pr edit 5 --attach "./local-run.png#shot"');
+});
+
+test('contract block explains to run the fix separately', () => {
+  bad('git push', { contractIssues: () => ['contract T: failing: i1'] }, /separate|own command/);
 });

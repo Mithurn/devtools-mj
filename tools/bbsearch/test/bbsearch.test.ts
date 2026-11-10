@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { BoardApi } from '../src/api.js';
 import { resolveBoards } from '../src/config.js';
 import { decodeJwt, upsertEnvLine } from '../src/cookie.js';
-import { jobLink, parseTerms } from '../src/format.js';
+import { jobLink, parseTerms, redact, redactText } from '../src/format.js';
 import { openStore, searchJobs } from '../src/store.js';
 import { syncBoard } from '../src/sync.js';
 
@@ -55,4 +55,19 @@ test('cookie helpers decode the token and replace or append the env line', () =>
   assert.deepEqual(decodeJwt(`h.${payload}.s`), { email: 'a@b.co', exp: 1900000000 });
   assert.equal(upsertEnvLine('A=1\nK=old\nB=2\n', 'K', 'new'), 'A=1\nK=new\nB=2\n');
   assert.equal(upsertEnvLine('A=1\n', 'K', 'new'), 'A=1\nK=new\n');
+});
+
+test('exact keeps the phrase whole', () => {
+  assert.deepEqual(parseTerms('required scope', true), ['required scope']);
+});
+
+test('redact hides secret-looking fields by default', () => {
+  const out = redact({ email: 'a@b.com', password: 'x', nested: { microsoftAdminRefreshToken: 't', apiKey: 'k', n: 1 } }) as Record<string, any>;
+  assert.equal(out.email, 'a@b.com');
+  assert.equal(out.password, '[redacted]');
+  assert.equal(out.nested.microsoftAdminRefreshToken, '[redacted]');
+  assert.equal(out.nested.apiKey, '[redacted]');
+  assert.equal(out.nested.n, 1);
+  assert.match(redactText('{"data":{"password":"abc"}}'), /redacted/);
+  assert.doesNotMatch(redactText('not json password: "abc"'), /abc/);
 });
